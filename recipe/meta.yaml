@@ -1,0 +1,15 @@
+package:
+  name: dodecad
+
+source:
+  - path: ../dodecad.asd
+  - path: ../src
+    folder: src
+  - path: ../lib
+    folder: lib
+
+build:
+  script_env:
+    - SBCL_SRC
+    - LIBRARY_PATH
+    - LD_LIBRARY_PATH
