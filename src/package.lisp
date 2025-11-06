@@ -1,0 +1,2 @@
+(defpackage #:dodecad
+  (:use #:cl))
