@@ -1,2 +1,8 @@
 (defpackage #:dodecad
-  (:use #:cl))
+  (:use #:cl)
+  (:export
+   #:default-row
+   #:transpose
+   #:retrograde
+   #:inverse
+   #:print-matrix))

@@ -1,9 +1,5 @@
 (in-package #:dodecad)
 
-;;;
-;;; Row tones must be the set {0-11} without duplicates
-;;;
-
 (defun %valid-row-tones-p (tones)
   (= 12
      (length (intersection '(0 1 2 3 4 5 6 7 8 9 10 11) tones))))
@@ -15,9 +11,9 @@
   '(0 1 2 3 4 5 6 7 8 9 10 11))
 
 ;;;
-;;; Turning tone row lists '(0 1 2 3 4 5 6 7 8 9 10 11) into 48 bit integer representation
+;;; Turning tone row lists '(0 1 2 3 4 5 6 7 8 9 10 11) into 64 bit integer representation
 ;;;
-;;; Prefix: <1-bit Inverse><1-bit Retrograde><4 bits root>
+;;; <1-bit Inverse>|<1-bit Retrograde>|<4 bits root><8 bits free>|<48 bits tone-row>
 ;;;
 
 (defun %encode-prefix (root inverse retrograde)
@@ -26,7 +22,7 @@
 	       root)
        48))
 
-(defun encode-row (tones &key inverse retrograde)
+(defun %encode-row (tones &key inverse retrograde)
   "Encode a list of tones"
   (loop :with encoded := 0
 	:for tone :in (reverse tones)
@@ -36,7 +32,7 @@
 						 retrograde)
 				 encoded))))
 
-(defun decode-row (row)
+(defun %decode-row (row)
   (loop :with decoding := row
 	:until (= 12 (length decoded))
 	:collect (logand decoding #b1111) :into decoded
@@ -58,64 +54,70 @@
 (defun %flip-retrograde-flag (row)
   (%flip-flag row 62))
 
-(defmacro with-split-row (row &body body)
-  `(let ((prefix (logand #xFFFF000000000000 ,row))
-	 (tones  (logand #x0000FFFFFFFFFFFF ,row))
-	 (out    #x0000000000000000))
-     ,@body))
-
 ;;;
 ;;; Encoded Row operations
 ;;;
 
-(defun transpose (row degree)
-  (with-split-row row
-    (loop :for i :from 0 :to 44 :by 4
-	  :do (setq out (logior (ash (mod (+ degree
-					     (logand #xF (ash tones (- i))))
+(defmacro %with-transform (row &body body)
+  "Transform a row according to a function applied to "
+  `(let ((prefix (logand #xFFFF000000000000 ,row))
+	 (tones  (logand #x0000FFFFFFFFFFFF ,row))
+	 (out    #x0000000000000000))
+     (loop :for i :from 0 :to 44 :by 4
+	   :do ,@body
+	   :finally (return (logior prefix out)))))
+
+(defun %transpose (row degree)
+  (%with-transform row
+    (setq out (logior (ash (mod (+ degree
+				   (logand #xF (ash tones (- i))))
 					  12)
 				     i)
-				out))
-	  :finally (return (logior prefix out)))))
+				out))))
+
+(defun transpose (row degree)
+  (%decode-row (%transpose (%encode-row row) degree)))
+
+(defun %retrograde (row)
+  (%with-transform row
+    (setq out (logior (ash (logand #xF (ash tones (- i)))
+			   (- 44 i))
+		      out))))
 
 (defun retrograde (row)
-  (with-split-row row
-    (loop :for i :from 0 :to 44 :by 4
-	  :do (setq out (logior (ash (logand #xF (ash tones (- i)))
-				     (- 44 i))
-				out))
-	  :finally (return (logior prefix out)))))
+  (%decode-row (%retrograde (%encode-row row))))
+
+(defun %inverse (row)
+  (%with-transform row
+    (setq out (logior (ash (mod (- #b1100
+				   (logand #xF (ash tones (- i))))
+				12)
+			   i)
+		      out))))
 
 (defun inverse (row)
-  (with-split-row row
-    (loop :for i :from 0 :to 44 :by 4
-	  :do (setq out (logior (ash (mod (- #b1100
-					     (logand #xF (ash tones (- i))))
-					  12)
-				     i)
-				out))
-	  :finally (return (logior prefix out)))))
+  (%decode-row (%inverse (%encode-row row))))
 
 ;;;
 ;;; Printing rows and matrices
 ;;;
 
-(defun print-tone (tone &optional (stream nil))
+(defun %print-tone (tone &optional (stream nil))
   (if (= (length (format nil "~d" tone)) 1)
       (format stream "  ~d |" tone)
       (format stream " ~d |" tone)))
 
-(defun print-row (row &optional (stream *standard-output*))
+(defun %print-row (row &optional (stream *standard-output*))
   (format stream "|~{~a~}~%"
 	  (map 'list #'print-tone
 	       (etypecase row
 		 (integer
-		  (decode-row row))
+		  (%decode-row row))
 		 (%valid-row-tones
 		  row)))))
 
 (defun print-matrix (row &optional (stream *standard-output*))
   "Generate and print the tone row matrix for the given row."
   (let* ((p0 (first row)))
-    (loop :for root :in (decode-row (inverse (encode-row row)))
-	  :do (print-row (transpose (encode-row row) (mod (+ p0 root) 12)) stream))))
+    (loop :for root :in (inverse row)
+	  :do (%print-row (transpose row (mod (+ p0 root) 12)) stream))))
