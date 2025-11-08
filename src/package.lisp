@@ -5,4 +5,5 @@
    #:transpose
    #:retrograde
    #:inverse
+   #:matrix
    #:print-matrix))

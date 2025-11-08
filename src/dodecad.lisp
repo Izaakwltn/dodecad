@@ -91,21 +91,7 @@
 ;;; Printing rows and matrices
 ;;;
 
-(defun %print-tone (tone &optional (stream nil))
-  (if (= (length (format nil "~d" tone)) 1)
-      (format stream "  ~d |" tone)
-      (format stream " ~d |" tone)))
-
-(defun %print-row (row &optional (stream *standard-output*))
-  (format stream "|~{~a~}~%"
-	  (map 'list #'print-tone
-	       (etypecase row
-		 (integer
-		  (%decode-row row))
-		 (%valid-row-tones
-		  row)))))
-
 (defun print-matrix (row &optional (stream *standard-output*))
   "Generate and print the tone row matrix for the given row."
-  (dolist (row (matrix row))
-      (%print-row row stream)))
+  (dolist (r (matrix row))
+    (format stream "|~{~3d |~}~%" r)))
